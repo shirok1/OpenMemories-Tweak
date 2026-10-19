@@ -1,5 +1,3 @@
-import com.android.build.gradle.tasks.ExternalNativeBuildTask
-
 apply plugin: 'com.android.application'
 
 android {
@@ -13,12 +11,6 @@ android {
         targetSdkVersion 10
         versionCode "git -C ${projectDir} rev-list --first-parent --count HEAD".execute().text.trim().toInteger()
         versionName "git -C ${projectDir} describe --always --tags --dirty".execute().text.trim().replaceAll("^v", "")
-        externalNativeBuild {
-            ndkBuild {
-                abiFilters 'armeabi'
-                targets 'tweak', 'adbd'
-            }
-        }
     }
 
     compileOptions {
@@ -26,22 +18,15 @@ android {
         targetCompatibility JavaVersion.VERSION_1_8
     }
 
-    externalNativeBuild {
-        ndkBuild {
-            path 'src/main/jni/Android.mk'
-        }
-    }
-
+    // Native outputs are stripped by their own toolchains.
     packagingOptions {
-        // Whitelist for libraries
-        pickFirst 'lib/armeabi/libtweak.so'
-        pickFirst 'lib/armeabi/libprotectiontweak.so'
-        pickFirst 'lib/armeabi/libadbd.so'
-        exclude 'lib/armeabi/*.so'
+        doNotStrip '**/*.so'
     }
 
     sourceSets.main {
-        jniLibs.srcDir "$buildDir/libs"
+        // Native compilation is handled by buildAndroidNative, not legacy AGP.
+        jni.srcDirs = []
+        jniLibs.srcDir "$buildDir/generated/jniLibs"
     }
 }
 
@@ -74,17 +59,53 @@ task runMake(type: Exec) {
     }
 }
 
-tasks.withType(ExternalNativeBuildTask) {
-    dependsOn runMake
-    doLast {
-        copy {
-            // Rename executables to lib*.so, so android will unpack them for us during installation
-            from files(
-                    "$buildDir/platform/protectiontweak",
-                    new File(objFolder, "armeabi/adbd"),
-            )
-            into "$buildDir/libs/armeabi"
-            rename { fn -> "lib${fn}.so" }
+// Keep the old armeabi toolchain independent of AGP's native-build ABI model.
+// Both APK variants use optimized native binaries; NDK handles incremental builds.
+task buildAndroidNative(type: Exec) {
+    doFirst {
+        def properties = new Properties()
+        def localProperties = rootProject.file('local.properties')
+        if (localProperties.isFile()) {
+            localProperties.withInputStream { properties.load(it) }
+        }
+        def ndk = properties.getProperty('ndk.dir',
+                new File(android.sdkDirectory, 'ndk/14.1.3816874').absolutePath)
+        def command = ["$ndk/ndk-build"]
+        if (System.getProperty('os.name').startsWith('Mac')) {
+            environment 'NDK_HOST_AWK', '/usr/bin/awk'
+            if (System.getProperty('os.arch') in ['aarch64', 'arm64']) {
+                command = ['/usr/bin/arch', '-x86_64', '/bin/bash'] + command
+            }
+        }
+        commandLine command + [
+                "NDK_PROJECT_PATH=$projectDir/src/main",
+                "NDK_OUT=$buildDir/ndk/obj",
+                "NDK_LIBS_OUT=$buildDir/ndk/libs",
+                'APP_MODULES=tweak adbd', 'NDK_DEBUG=0', '-j4'
+        ]
+    }
+}
+
+task prepareNativeLibraries(type: Sync) {
+    dependsOn 'buildAndroidNative', 'runMake'
+    into "$buildDir/generated/jniLibs/armeabi"
+    from("$buildDir/ndk/libs/armeabi") {
+        include 'libtweak.so', 'adbd'
+        rename '^adbd$', 'libadbd.so'
+    }
+    from("$buildDir/platform") {
+        include 'protectiontweak'
+        rename '^protectiontweak$', 'libprotectiontweak.so'
+    }
+    doFirst {
+        ["$buildDir/ndk/libs/armeabi/libtweak.so",
+         "$buildDir/ndk/libs/armeabi/adbd",
+         "$buildDir/platform/protectiontweak"].each { path ->
+            if (!file(path).isFile()) {
+                throw new GradleException("Missing native build output: $path")
+            }
         }
     }
 }
+
+preBuild.dependsOn prepareNativeLibraries

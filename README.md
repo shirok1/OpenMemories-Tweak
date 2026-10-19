@@ -40,15 +40,12 @@ Copy `local.properties.example` to `local.properties` and set absolute paths.
 The Linux compiler binaries are not executed, and no VM is needed. Omitting
 `linaro.dir` retains the original `arm-linux-gnueabi-gcc/g++` build path.
 
-For the old Android NDK host tools on Apple Silicon, install Rosetta and replace
-the NDK's small entry script once (the target compiler and libraries are unchanged):
-
-```sh
-NDK_R14B=/absolute/path/to/Android/sdk/ndk/14.1.3816874
-[ -f "$NDK_R14B/ndk-build.original" ] || cp "$NDK_R14B/ndk-build" "$NDK_R14B/ndk-build.original"
-cp scripts/ndk-build-macos "$NDK_R14B/ndk-build"
-chmod +x "$NDK_R14B/ndk-build"
-```
+Gradle invokes the original NDK r14b launcher through an independent task. On
+Apple Silicon it selects Rosetta and system awk automatically; no SDK patch is
+required. Native files are copied into a generated staging directory using an
+explicit allowlist, independently of AGP's internal native-build task classes.
+Both APK variants use optimized, stripped native binaries. Install Rosetta on
+Apple Silicon before building.
 
 Clang uses the old libstdc++ ABI for the Linux helper. Linaro's startup objects
 mark that helper ARMv7 / Linux 3.2; the original Makefile intends it for Gen3 only.
