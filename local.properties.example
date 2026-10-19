@@ -1,7 +1,7 @@
 # Copy to local.properties and replace the paths with absolute paths.
 # Java properties do not expand ~ or environment variables.
 sdk.dir=/absolute/path/to/Android/sdk
-ndk.dir=/absolute/path/to/Android/sdk/ndk/14.1.3816874
+ndk.dir=/absolute/path/to/Android/sdk/ndk/16.1.4479499
 linaro.dir=/absolute/path/to/gcc-linaro-7.5.0-2019.12-x86_64_arm-linux-gnueabi
 llvm.dir=/opt/homebrew/opt/llvm
 lld.path=/opt/homebrew/opt/lld/bin/ld.lld

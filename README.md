@@ -28,7 +28,7 @@ Central.
 ### SDK and source dependencies
 
 ```sh
-android sdk install platforms/android-29 build-tools/30.0.3
+android sdk install platforms/android-29 build-tools/30.0.3 ndk/16.1.4479499
 git submodule update --init app/src/main/jni/platform app/src/main/jni/android_platform_system_core
 ```
 
@@ -36,12 +36,19 @@ Initialize only these direct submodules, without `--recursive`. The nested
 `platform/stlport` checkout is used by Platform's separate Gen1 updater and is
 not needed by this app.
 
-Use the official **NDK r14b (14.1.3816874)** archive from Google and extract it
-under `sdk/ndk/14.1.3816874`. The Android native build remains Clang + static
-libc++, API 9 and `armeabi`. Java compilation uses SDK 29; APK minSdk/targetSdk
-remain 10. Gradle invokes the native tools independently of AGP's ABI model and
-stages only the three intended native files. Both APK variants use optimized,
-stripped native binaries.
+Use **NDK r16b (16.1.4479499)** from SDK Manager. Android native code uses
+Clang and static libc++, not STLport. It retains `armeabi`; the native compilation
+API is 14 because r16b no longer supplies API 9/10. The APK still declares
+`minSdkVersion` and `targetSdkVersion` 10. SDK 29 is used for Java compilation.
+This adopts the newer host JDK, Build Tools and NDK used by
+[Recipe Lab](https://github.com/voxivoid/recipe-lab-sony-pmca/blob/main/build.sh),
+while retaining libc++ and a Gradle build entry point.
+
+Gradle calls `ndk-build` through its own task, independently of AGP's supported
+native ABI list. It stages only the three intended native files for packaging;
+Sony link stubs are never included. Both debug and release APKs use optimized,
+stripped native binaries. The `compat/legacy_adbd.h` header preserves the old
+property-service wire format required by the bundled Gingerbread adbd.
 
 ### Linux helper on macOS
 
@@ -65,7 +72,7 @@ Make. It uses the old libstdc++ string ABI (`_GLIBCXX_USE_CXX11_ABI=0`) and a
 non-PIE Linux executable to stay close to the original build. If `linaro.dir`
 is omitted, Make still uses `arm-linux-gnueabi-gcc/g++` from `PATH`.
 
-On Apple Silicon, the r14b host binaries require Rosetta. The Gradle task
+On Apple Silicon, the r16b host binaries require Rosetta. The Gradle task
 selects Rosetta and system awk automatically, without modifying the SDK-managed
 NDK. Homebrew Clang/LLD for the Linux helper runs natively on Apple Silicon.
 
@@ -74,7 +81,8 @@ NDK. Homebrew Clang/LLD for the Linux helper runs natively on Apple Silicon.
 The complete debug APK has been built with this configuration and its signature
 verified for API 10; its DEX format is 035. Native strong imports were checked
 against the NDK r14b API 9 stub libraries plus the Sony OSAL link stub, with no
-missing symbols. It packages only `libtweak.so`, `libadbd.so`, and
+missing symbols. This audit does not make API 10 officially supported by r16b.
+It packages only `libtweak.so`, `libadbd.so`, and
 `libprotectiontweak.so`; Sony link stubs are excluded. The Linux helper's versioned
 imports are `GLIBC_2.4`, `GLIBCXX_3.4`, `CXXABI_1.3`, and `GCC_3.5`.
 Linaro's prebuilt startup objects mark this helper as ARMv7 with a Linux 3.2

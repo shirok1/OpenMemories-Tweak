@@ -70,7 +70,7 @@ tasks.register('buildAndroidNative', Exec) {
             localProperties.withInputStream { properties.load(it) }
         }
         def ndk = properties.getProperty('ndk.dir',
-                new File(android.sdkDirectory, 'ndk/14.1.3816874').absolutePath)
+                new File(android.sdkDirectory, 'ndk/16.1.4479499').absolutePath)
         def command = ["$ndk/ndk-build"]
         if (System.getProperty('os.name').startsWith('Mac')) {
             environment 'NDK_HOST_AWK', '/usr/bin/awk'
