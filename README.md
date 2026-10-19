@@ -13,44 +13,75 @@ This app should be compatible with all Sony cameras supporting PlayMemories Came
 
 ## Building
 
-Build the complete APK with `./gradlew assembleDebug`; the output is
-`app/build/outputs/apk/debug/app-debug.apk`. Gradle 4.1 / AGP 3.0.1 require JDK 8.
-The macOS wrapper selects an installed JDK 8 when `JAVA_HOME` is unset.
-In Android Studio, select JDK 8 as the Gradle JDK.
-
-Install SDK packages and initialize only direct submodules:
+Run the complete build from the repository root:
 
 ```sh
-android sdk install platforms/android-29 build-tools/26.0.2
+./gradlew assembleDebug
+```
+
+The APK is written to `app/build/outputs/apk/debug/app-debug.apk`. The wrapper
+uses Gradle 7.6.4 with Android Gradle Plugin 7.4.2 and **JDK 17**. On macOS,
+`gradlew` selects an installed JDK 17 when `JAVA_HOME` is unset. For Android Studio,
+select JDK 17 as the Gradle JDK. Java sources still target Java 8. Dependency resolution uses Google Maven and Maven
+Central.
+
+### SDK and source dependencies
+
+```sh
+android sdk install platforms/android-29 build-tools/30.0.3
 git submodule update --init app/src/main/jni/platform app/src/main/jni/android_platform_system_core
 ```
 
-Use Google's NDK r14b archive under `sdk/ndk/14.1.3816874`. The native build
-retains API 9 and `armeabi`; APK minSdk/targetSdk remain 10. Compile SDK 29 avoids
-the removed `tools/support/annotations.jar` dependency in the legacy plugin.
-Android native code uses Clang and the NDK's static libc++; it no longer uses
-STLport. The nested Platform STLport checkout is unnecessary: only Platform's
-separate Gen1 updater needs it.
+Initialize only these direct submodules, without `--recursive`. The nested
+`platform/stlport` checkout is used by Platform's separate Gen1 updater and is
+not needed by this app.
 
-The Linux `protectiontweak` helper uses Homebrew Clang/LLD with the headers and
-ARM libraries from Linaro 7.5-2019.12. Install `brew install llvm lld` and extract
-[the official arm-linux-gnueabi archive](https://developer.arm.com/-/cdn-downloads/permalink/legacy-linaro-gnu-toolchains/7.5-2019.12/gcc-linaro-7.5.0-2019.12-x86_64_arm-linux-gnueabi.tar.xz).
-Its SHA-256 is `dda99cf2fc0a8b6d54440121c47645ab0b4dc921cc2d24f88707ea9741adc933`.
-Copy `local.properties.example` to `local.properties` and set absolute paths.
-The Linux compiler binaries are not executed, and no VM is needed. Omitting
-`linaro.dir` retains the original `arm-linux-gnueabi-gcc/g++` build path.
+Use the official **NDK r14b (14.1.3816874)** archive from Google and extract it
+under `sdk/ndk/14.1.3816874`. The Android native build remains Clang + static
+libc++, API 9 and `armeabi`. Java compilation uses SDK 29; APK minSdk/targetSdk
+remain 10. Gradle invokes the native tools independently of AGP's ABI model and
+stages only the three intended native files. Both APK variants use optimized,
+stripped native binaries.
 
-Gradle invokes the original NDK r14b launcher through an independent task. On
-Apple Silicon it selects Rosetta and system awk automatically; no SDK patch is
-required. Native files are copied into a generated staging directory using an
-explicit allowlist, independently of AGP's internal native-build task classes.
-Both APK variants use optimized, stripped native binaries. Install Rosetta on
-Apple Silicon before building.
+### Linux helper on macOS
 
-Clang uses the old libstdc++ ABI for the Linux helper. Linaro's startup objects
-mark that helper ARMv7 / Linux 3.2; the original Makefile intends it for Gen3 only.
-Build success does not replace camera runtime testing. Sony link stubs must
-never be packaged in the APK.
+`protectiontweak` runs outside the Android chroot and retains its GNU/Linux ABI.
+Build it with native Homebrew Clang/LLD and the headers and ARM libraries from
+**Linaro 7.5-2019.12**:
+
+```sh
+brew install llvm lld
+```
+
+Download and extract
+[`gcc-linaro-7.5.0-2019.12-x86_64_arm-linux-gnueabi.tar.xz`](https://developer.arm.com/-/cdn-downloads/permalink/legacy-linaro-gnu-toolchains/7.5-2019.12/gcc-linaro-7.5.0-2019.12-x86_64_arm-linux-gnueabi.tar.xz).
+The verified archive SHA-256 is
+`dda99cf2fc0a8b6d54440121c47645ab0b4dc921cc2d24f88707ea9741adc933`.
+The Linux compiler executables in the archive are not run; no Linux VM is needed.
+
+Copy `local.properties.example` to `local.properties` and set the absolute SDK,
+NDK, Linaro, LLVM and LLD paths. Gradle passes the cross-compilation settings to
+Make. It uses the old libstdc++ string ABI (`_GLIBCXX_USE_CXX11_ABI=0`) and a
+non-PIE Linux executable to stay close to the original build. If `linaro.dir`
+is omitted, Make still uses `arm-linux-gnueabi-gcc/g++` from `PATH`.
+
+On Apple Silicon, the r14b host binaries require Rosetta. The Gradle task
+selects Rosetta and system awk automatically, without modifying the SDK-managed
+NDK. Homebrew Clang/LLD for the Linux helper runs natively on Apple Silicon.
+
+### Verification scope
+
+The complete debug APK has been built with this configuration and its signature
+verified for API 10; its DEX format is 035. Native strong imports were checked
+against the NDK r14b API 9 stub libraries plus the Sony OSAL link stub, with no
+missing symbols. It packages only `libtweak.so`, `libadbd.so`, and
+`libprotectiontweak.so`; Sony link stubs are excluded. The Linux helper's versioned
+imports are `GLIBC_2.4`, `GLIBCXX_3.4`, `CXXABI_1.3`, and `GCC_3.5`.
+Linaro's prebuilt startup objects mark this helper as ARMv7 with a Linux 3.2
+ABI note, even though project sources use `-march=armv5te`. The original Makefile
+intends this helper for Gen3 devices only; it is not an ARMv5-compatible helper.
+This is build/link validation, not a guarantee of compatibility with every camera:
+loading, exception handling and protection changes still require device testing.
 
 ## A word of caution
 This is not an official Sony application. All information has been found through reverse engineering. Even though everything worked fine for our developers, it could cause harm to your hardware. If you break your camera, you get to keep both pieces. **We won't take any responsibility.**

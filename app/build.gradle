@@ -1,9 +1,9 @@
 apply plugin: 'com.android.application'
 
 android {
-    // A modern android.jar avoids the removed SDK tools/support/annotations.jar.
-    // Device compatibility is still controlled by minSdkVersion/targetSdkVersion.
+    namespace 'com.github.ma1co.openmemories.tweak'
     compileSdkVersion 29
+    buildToolsVersion '30.0.3'
 
     defaultConfig {
         applicationId 'com.github.ma1co.openmemories.tweak'
@@ -18,16 +18,17 @@ android {
         targetCompatibility JavaVersion.VERSION_1_8
     }
 
-    // Native outputs are stripped by their own toolchains.
     packagingOptions {
-        doNotStrip '**/*.so'
+        jniLibs {
+            // Old cameras need native files extracted by the package installer.
+            useLegacyPackaging = true
+            // ndk-build and the Linux Makefile already strip their outputs.
+            // Do not ask modern AGP to select an NDK/ABI for these legacy files.
+            keepDebugSymbols += ['**/*.so']
+        }
     }
 
-    sourceSets.main {
-        // Native compilation is handled by buildAndroidNative, not legacy AGP.
-        jni.srcDirs = []
-        jniLibs.srcDir "$buildDir/generated/jniLibs"
-    }
+    sourceSets.main.jniLibs.srcDir "$buildDir/generated/jniLibs"
 }
 
 task runMake(type: Exec) {
@@ -61,7 +62,7 @@ task runMake(type: Exec) {
 
 // Keep the old armeabi toolchain independent of AGP's native-build ABI model.
 // Both APK variants use optimized native binaries; NDK handles incremental builds.
-task buildAndroidNative(type: Exec) {
+tasks.register('buildAndroidNative', Exec) {
     doFirst {
         def properties = new Properties()
         def localProperties = rootProject.file('local.properties')
@@ -86,7 +87,7 @@ task buildAndroidNative(type: Exec) {
     }
 }
 
-task prepareNativeLibraries(type: Sync) {
+tasks.register('prepareNativeLibraries', Sync) {
     dependsOn 'buildAndroidNative', 'runMake'
     into "$buildDir/generated/jniLibs/armeabi"
     from("$buildDir/ndk/libs/armeabi") {
@@ -108,4 +109,6 @@ task prepareNativeLibraries(type: Sync) {
     }
 }
 
-preBuild.dependsOn prepareNativeLibraries
+tasks.named('preBuild') {
+    dependsOn 'prepareNativeLibraries'
+}
