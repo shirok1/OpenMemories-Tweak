@@ -3,7 +3,9 @@ import com.android.build.gradle.tasks.ExternalNativeBuildTask
 apply plugin: 'com.android.application'
 
 android {
-    compileSdkVersion 10
+    // A modern android.jar avoids the removed SDK tools/support/annotations.jar.
+    // Device compatibility is still controlled by minSdkVersion/targetSdkVersion.
+    compileSdkVersion 29
 
     defaultConfig {
         applicationId 'com.github.ma1co.openmemories.tweak'
@@ -44,10 +46,32 @@ android {
 }
 
 task runMake(type: Exec) {
-    // This will compile the backupsetid1 executable that can be run outside the chrooted android
-    // environment
+    // Compile the Linux executable that runs outside the Android chroot.
     executable = 'make'
     args = ["-C", "$projectDir/src/main/jni", "BUILDDIR=$buildDir/platform"]
+    doFirst {
+        def properties = new Properties()
+        def localProperties = rootProject.file('local.properties')
+        if (localProperties.isFile()) {
+            localProperties.withInputStream { properties.load(it) }
+        }
+        def linaro = properties.getProperty('linaro.dir')
+        if (linaro) {
+            def llvm = properties.getProperty('llvm.dir')
+            def lld = properties.getProperty('lld.path')
+            if (!llvm || !lld) {
+                throw new GradleException('Set llvm.dir and lld.path alongside linaro.dir in local.properties')
+            }
+            // Make executes CC/CXX through a shell, so quote configured paths.
+            def quote = { value -> "'" + value.replace("'", "'\\''") + "'" }
+            def flags = "--target=arm-linux-gnueabi --sysroot=${quote(linaro + '/arm-linux-gnueabi/libc')} " +
+                    "--gcc-toolchain=${quote(linaro)} -fuse-ld=${quote(lld)} " +
+                    '-Wno-unused-command-line-argument -Wno-vla-extension -Wno-strict-prototypes'
+            args '--always-make',
+                    "CC=${quote(llvm + '/bin/clang')} $flags",
+                    "CXX=${quote(llvm + '/bin/clang++')} $flags -stdlib=libstdc++ -rtlib=libgcc -no-pie -D_GLIBCXX_USE_CXX11_ABI=0"
+        }
+    }
 }
 
 tasks.withType(ExternalNativeBuildTask) {

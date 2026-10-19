@@ -11,6 +11,49 @@ Please read [this section](https://github.com/ma1co/Sony-PMCA-RE#installing-andr
 ## Compatibility
 This app should be compatible with all Sony cameras supporting PlayMemories Camera Apps (PMCA). See [here](https://github.com/ma1co/OpenMemories-Framework/blob/master/docs/Cameras.md) for a full list.
 
+## Building
+
+Build the complete APK with `./gradlew assembleDebug`; the output is
+`app/build/outputs/apk/debug/app-debug.apk`. Gradle 4.1 / AGP 3.0.1 require JDK 8.
+The macOS wrapper selects an installed JDK 8 when `JAVA_HOME` is unset.
+In Android Studio, select JDK 8 as the Gradle JDK.
+
+Install SDK packages and initialize only direct submodules:
+
+```sh
+android sdk install platforms/android-29 build-tools/26.0.2
+git submodule update --init app/src/main/jni/platform app/src/main/jni/android_platform_system_core
+```
+
+Use Google's NDK r14b archive under `sdk/ndk/14.1.3816874`. The native build
+retains API 9 and `armeabi`; APK minSdk/targetSdk remain 10. Compile SDK 29 avoids
+the removed `tools/support/annotations.jar` dependency in the legacy plugin.
+The nested Platform STLport checkout is unnecessary: Android uses the NDK's
+bundled STLport; only Platform's separate Gen1 updater needs the checkout.
+
+The Linux `protectiontweak` helper uses Homebrew Clang/LLD with the headers and
+ARM libraries from Linaro 7.5-2019.12. Install `brew install llvm lld` and extract
+[the official arm-linux-gnueabi archive](https://developer.arm.com/-/cdn-downloads/permalink/legacy-linaro-gnu-toolchains/7.5-2019.12/gcc-linaro-7.5.0-2019.12-x86_64_arm-linux-gnueabi.tar.xz).
+Its SHA-256 is `dda99cf2fc0a8b6d54440121c47645ab0b4dc921cc2d24f88707ea9741adc933`.
+Copy `local.properties.example` to `local.properties` and set absolute paths.
+The Linux compiler binaries are not executed, and no VM is needed. Omitting
+`linaro.dir` retains the original `arm-linux-gnueabi-gcc/g++` build path.
+
+For the old Android NDK host tools on Apple Silicon, install Rosetta and replace
+the NDK's small entry script once (the target compiler and libraries are unchanged):
+
+```sh
+NDK_R14B=/absolute/path/to/Android/sdk/ndk/14.1.3816874
+[ -f "$NDK_R14B/ndk-build.original" ] || cp "$NDK_R14B/ndk-build" "$NDK_R14B/ndk-build.original"
+cp scripts/ndk-build-macos "$NDK_R14B/ndk-build"
+chmod +x "$NDK_R14B/ndk-build"
+```
+
+Clang uses the old libstdc++ ABI for the Linux helper. Linaro's startup objects
+mark that helper ARMv7 / Linux 3.2; the original Makefile intends it for Gen3 only.
+Build success does not replace camera runtime testing. Sony link stubs must
+never be packaged in the APK.
+
 ## A word of caution
 This is not an official Sony application. All information has been found through reverse engineering. Even though everything worked fine for our developers, it could cause harm to your hardware. If you break your camera, you get to keep both pieces. **We won't take any responsibility.**
 
