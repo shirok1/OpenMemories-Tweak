@@ -23,7 +23,8 @@ LOCAL_SRC_FILES := jni.cpp $(foreach source, $(SOURCES), $(wildcard $(addprefix 
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/$(PLATFORMDIR)
 LOCAL_CFLAGS += $(DEFS) $(WFLAGS) -fvisibility=hidden
 LOCAL_CONLYFLAGS += -std=c11
-LOCAL_CPPFLAGS += -std=c++98 -Wno-vla -Wno-variadic-macros -fexceptions
+# The legacy platform code uses variable-length arrays in C++.
+LOCAL_CPPFLAGS += -std=c++98 -Wno-vla -Wno-vla-extension -Wno-variadic-macros -fexceptions
 LOCAL_LDFLAGS += -Wl,--gc-sections -Wl,--exclude-libs,ALL
 LOCAL_SHARED_LIBRARIES := $(LIBS)
 include $(BUILD_SHARED_LIBRARY)

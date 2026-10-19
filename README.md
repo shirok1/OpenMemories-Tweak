@@ -28,8 +28,9 @@ git submodule update --init app/src/main/jni/platform app/src/main/jni/android_p
 Use Google's NDK r14b archive under `sdk/ndk/14.1.3816874`. The native build
 retains API 9 and `armeabi`; APK minSdk/targetSdk remain 10. Compile SDK 29 avoids
 the removed `tools/support/annotations.jar` dependency in the legacy plugin.
-The nested Platform STLport checkout is unnecessary: Android uses the NDK's
-bundled STLport; only Platform's separate Gen1 updater needs the checkout.
+Android native code uses Clang and the NDK's static libc++; it no longer uses
+STLport. The nested Platform STLport checkout is unnecessary: only Platform's
+separate Gen1 updater needs it.
 
 The Linux `protectiontweak` helper uses Homebrew Clang/LLD with the headers and
 ARM libraries from Linaro 7.5-2019.12. Install `brew install llvm lld` and extract
